@@ -1,6 +1,6 @@
 # transfer-maps - convert textures to new UV layouts
 
-I made this simple Unity app to be able to transfer maps between UV-set, as I feel baking is too cumbersome/slow/error prone.
+I made this simple Unity app to be able to transfer maps between UV-layouts, as I feel baking is too cumbersome/slow/error prone.
 
 ## Usage
  - Duplicate objects in your 3D app and add `_UVSOURCE` as postfix
@@ -19,7 +19,7 @@ I made this simple Unity app to be able to transfer maps between UV-set, as I fe
  - Configurable texture size and margin size in config.json
 
 ## Other things to note
- - ***NO WARRANTY, USE AT YOUR OWN RISK***
+ - ***NO WARRANTY, USE AT YOUR OWN RISK!***
  - No HDR (only 8bit per channel)
  - Limited texture support (jpg and png should be fine!) 
  - Limited texture size, I assume 16k is maximum.
@@ -36,7 +36,7 @@ If you project from a camera to low poly geometry, you will get distortion using
 
 ![Projection Example](transfer-maps-projection.jpg)
 
-## License and 3rd party components
+## License
 
 This uses the same license as Blender (GLP v3)
 
