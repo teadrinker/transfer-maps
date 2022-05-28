@@ -36,3 +36,11 @@ If you project from a camera to low poly geometry, you will get distortion using
 
 ![Projection Example](transfer-maps-projection.jpg)
 
+## License and 3rd party components
+
+This uses the same license as Blender (GLP v3)
+
+## 3rd party code
+ * OBJ run-time importer by Dummiesman (slightly modified by me)
+ * Windows drag'n drop support by Markus Göbel (Bunny83)
+ * MiniJSON by Calvin Rien / Patrick van Bergen
