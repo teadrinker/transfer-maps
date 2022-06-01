@@ -81,7 +81,7 @@ namespace teadrinker
 
 
                 var outTextureSize = 4096;
-                var outMarginIterations = 32;
+                var outMarginIterations = 16;
                 var cfgPath = System.IO.Path.Combine(GetPathNextToExe(), "config.json");
                 if(System.IO.File.Exists(cfgPath)) {
                     var cfgText = System.IO.File.ReadAllText(cfgPath);
@@ -89,7 +89,7 @@ namespace teadrinker
                     if(cfg.TryGetValue("OutputTextureSize", out object o))
                         outTextureSize = (int) (System.Convert.ToDouble(o) + 0.5);
                     if(cfg.TryGetValue("MarginPixels", out object o2))
-                        outMarginIterations = (int) (System.Convert.ToDouble(o2) / 2 + 0.5);
+                        outMarginIterations = (int) (System.Convert.ToDouble(o2) / 4 + 0.5);
                 }
                 else {
                     System.IO.File.WriteAllText(cfgPath, "{\n\"OutputTextureSize\" : 4096, \n\"MarginPixels\" : 64\n}\n");
@@ -205,7 +205,45 @@ namespace teadrinker
                                 var srcMesh = src.GetComponent<MeshFilter>().sharedMesh;
                                 var srcTexture = src.GetComponent<MeshRenderer>().sharedMaterial.mainTexture;
                                 if(srcMesh.vertexCount != mesh.vertexCount) {
-                                    LogError("ERROR! : Non matching topology between UVSOURCE and dest uv! " + obj.name);
+                                    var srcVerts = srcMesh.vertices;
+                                    var srcNorm = srcMesh.normals;
+                                    var srcUv = srcMesh.uv;
+                                    var dstVerts = mesh.vertices;
+                                    var dstNorm = mesh.normals;
+                                    var uvConverted = new Vector2[dstVerts.Length];
+                                    //var srcVertNormUVid = new List<System.Tuple<Vector3, Vector3, int>>();
+                                    //for(int i = 0; i < srcVerts.Length; i++)
+									//{
+                                    //    srcVertNormUVid.Add(new System.Tuple<Vector3, Vector3, int>(srcVerts[i], srcNorm[i], i));
+									//}
+                                    var largestDiff = 0f;
+                                    for(int i = 0; i < dstVerts.Length; i++)
+									{
+                                        var closestId = -1;
+                                        var closestDiff = 999999999999999999999999999999f;
+                                        for (int j = 0; j < srcVerts.Length; j++)
+										{
+                                            var diff = (dstVerts[i] - srcVerts[j]).sqrMagnitude + (dstNorm[i] - srcNorm[j]).sqrMagnitude * 0.005f;
+                                            if(diff < closestDiff)
+											{
+                                                closestDiff = diff;
+                                                closestId = j;
+											}
+                                        }
+                                        uvConverted[i] = srcUv[closestId];
+                                        if(closestDiff > largestDiff)
+										{
+                                            largestDiff = closestDiff;
+                                        }
+                                    }
+                                    if(largestDiff > 0.0001f)
+                                        LogError("WARNING! : Some vertices where not matched in object:\n    " + obj.name + ", largest diff: " + Mathf.Sqrt(largestDiff));
+                                    else 
+                                        Log("Successfully matched UVs based on vertex positions and normals:\n    " + obj.name + ", largest diff: " + Mathf.Sqrt(largestDiff));
+
+                                    mesh.uv2 = uvConverted;
+                                    mesh.name = obj.name;
+                                    list.Add(new System.Tuple<Mesh, Texture, bool>(mesh, srcTexture, true));                    
                                 }
                                 else
                                 {
