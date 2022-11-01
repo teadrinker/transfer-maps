@@ -16,14 +16,19 @@ namespace teadrinker
     {
         public string InputFileForEditorDebug = "";
         public bool showResult = true;
-        public bool saveResult = false;
+        //public bool saveResult = false;
         public string outDir = "";
         public Camera debugCam;
         public Material debugOut;
         public Shader ProjectToTextureMap;
         public Shader ExpandPixels;
         public Shader ObjImportedShaderOverride;
-        List<string> log = new List<string>();
+
+        [Space]
+        public Camera RenderNormalsCam;
+        public Material RenderNormalsMat;
+
+        private List<string> log = new List<string>();
         private RenderTexture _rt;
         private Texture _lastTex;
         private GameObject _lastProcessRoot;
@@ -50,6 +55,7 @@ namespace teadrinker
             Log("");
 
             var inputFile = InputFileForEditorDebug;
+
             if(!Application.isEditor) {
                 inputFile = "";
                 var args = System.Environment.GetCommandLineArgs();
@@ -81,7 +87,7 @@ namespace teadrinker
 
 
                 var outTextureSize = 4096;
-                var outMarginIterations = 16;
+                var outMarginIterations = 16; // note, 1 iteration does 4 pixels
                 var cfgPath = System.IO.Path.Combine(GetPathNextToExe(), "config.json");
                 if(System.IO.File.Exists(cfgPath)) {
                     var cfgText = System.IO.File.ReadAllText(cfgPath);
@@ -92,6 +98,7 @@ namespace teadrinker
                         outMarginIterations = (int) (System.Convert.ToDouble(o2) / 4 + 0.5);
                 }
                 else {
+                    // write defaults
                     System.IO.File.WriteAllText(cfgPath, "{\n\"OutputTextureSize\" : 4096, \n\"MarginPixels\" : 64\n}\n");
                 }
 
@@ -108,17 +115,18 @@ namespace teadrinker
                 var camTarget = Vector3.zero;
                 var camRight = Vector3.zero;
                 var udims = new Dictionary<int, List<System.Tuple<Mesh, Texture, bool>>>();
+                var refmaps = new List<System.Tuple<string, Mesh, Texture>>();
                 var namesToGO = new Dictionary<string, GameObject>();
-                var uvSources = new Dictionary<string, GameObject>();
+                var OLDUVs = new Dictionary<string, GameObject>();
 
                 foreach(Transform obj in root.transform) {
-                    if(obj.name.Contains("_UVSOURCE")) {
-                        var srcname = obj.name.Split(new string[]{"_UVSOURCE"}, System.StringSplitOptions.None)[0];
+                    if(obj.name.Contains("_OLDUV")) {
+                        var srcname = obj.name.Split(new string[]{"_OLDUV"}, System.StringSplitOptions.None)[0];
 
                         GameObject found = null;
                         int foundCount = 0;
                         foreach(Transform obj2 in root.transform) {
-                            if(obj2.name.StartsWith(srcname) && !obj2.name.Contains("_UVSOURCE")) {
+                            if(obj2.name.StartsWith(srcname) && !obj2.name.Contains("_OLDUV")) {
                                 found = obj2.gameObject;
                                 foundCount++;
                             }
@@ -126,16 +134,24 @@ namespace teadrinker
 
                         if(foundCount == 0)
                         {
-                            LogError("ERROR! : Cannot find matching object for uvsource: " + srcname +" (" + obj.name + ")");
+                            LogError("ERROR! : Cannot find matching object for OLDUV: " + srcname +" (" + obj.name + ")");
                         }
                         else if(foundCount > 1) 
                         {
-                            LogError("ERROR! : Ambigous name for uvsource (multiple available): " + obj.name);
-                            LogError("       (prefix before _UVSOURCE must be unique)");
+                            LogError("ERROR! : Ambigous name for OLDUV (multiple available): " + obj.name);
+                            LogError("       (prefix before _OLDUV must be unique)");
                         }
                         else
                         {
-                            uvSources.Add(found.name, obj.gameObject);
+                            if(!OLDUVs.ContainsKey(found.name))
+							{
+                                OLDUVs.Add(found.name, obj.gameObject);
+							}
+                            else
+							{
+                                LogError("ERROR! : multiple _OLDUV for object : " + obj.name + " (" + srcname + ") MAKE SURE OBJECTS DONT HAVE MULTIPLE MATERIALS!");
+
+							}
                         }
 
                     }
@@ -159,13 +175,20 @@ namespace teadrinker
                             if(parts.Length < 3)
                                 LogError("ERROR! : invalid cam naming convention! MISSING FOV:" + name +", should be cam_pos_90 (for 90 degree fov)");
                             else
-                                fov = System.Single.Parse(parts[2], System.Globalization.CultureInfo.InvariantCulture); 
+                                fov = System.Single.Parse(parts[2], System.Globalization.CultureInfo.InvariantCulture);
 
-                            if(parts.Length >= 4 && System.Single.TryParse(parts[3], System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out float tmp))
-                                camShiftX = tmp; 
+                            if (parts.Length >= 4 && System.Single.TryParse(parts[3], System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out float tmp))
+                            {
+                                camShiftX = tmp;
+                                Log("Using Lens Shift X: " + camShiftX);
+                            }
 
-                            if(parts.Length >= 5 && System.Single.TryParse(parts[4], System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out float tmp2))
-                                camShiftY = tmp2; 
+                            if (parts.Length >= 5 && System.Single.TryParse(parts[4], System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out float tmp2))
+                            {
+                                camShiftY = tmp2;
+                                Log("Using Lens Shift Y: " + camShiftY);
+                            }
+
                         }
                         else if(name.StartsWith("cam_right_", System.StringComparison.InvariantCultureIgnoreCase))
                             camRight = center;
@@ -174,9 +197,14 @@ namespace teadrinker
                         else
                             LogError("ERROR! : invalid camera naming convention! " + name);
                     }
+                    else if(name.Contains("_REFLECTIONMAP"))
+                    {
+                        var outname = obj.name.Split(new string[] { "_REFLECTIONMAP" }, System.StringSplitOptions.None)[0];
+                        refmaps.Add(new System.Tuple<string, Mesh, Texture>(outname, mesh, obj.GetComponent<MeshRenderer>().sharedMaterial.mainTexture));
+                    }
                     else {
 
-                        if(name.Contains("_UVSOURCE")) 
+                        if(name.Contains("_OLDUV")) 
                             continue;
 
                         var uv = mesh.uv;
@@ -200,8 +228,8 @@ namespace teadrinker
                                 udims.Add(packed, list);
                             }
 
-                            if(uvSources.ContainsKey(obj.name)) {
-                                var src = uvSources[obj.name];
+                            if(OLDUVs.ContainsKey(obj.name)) {
+                                var src = OLDUVs[obj.name];
                                 var srcMesh = src.GetComponent<MeshFilter>().sharedMesh;
                                 var srcTexture = src.GetComponent<MeshRenderer>().sharedMaterial.mainTexture;
                                 if(srcMesh.vertexCount != mesh.vertexCount) {
@@ -269,73 +297,137 @@ namespace teadrinker
                                                            Quaternion.LookRotation(forward, Vector3.Cross(forward, (camRight - camPos).normalized) );
                     var ma = Matrix4x4.TRS(camPos, rot, Vector3.one);
 
-                    if(debugCam != null)
-                    {
-                        debugCam.transform.position = camPos;
-                        debugCam.transform.rotation = rot;
-                        debugCam.transform.localScale = Vector3.one;
-                        debugCam.fieldOfView = fov;
-                    }
+                    if (debugCam != null)
+                        RenderUtils.ApplyCameraParams(debugCam, camPos, rot, fov, camShiftX, camShiftY);
+
+                    RenderUtils.ApplyCameraParams(RenderNormalsCam, camPos, rot, fov, camShiftX, camShiftY);
 
                     mat.SetMatrix("_ToCameraSpace", ma.inverse);
                     var fovParams = new Vector4(
                         1.0f / Mathf.Tan(0.5f*fov * Mathf.Deg2Rad), 
-                        1.0f / Mathf.Tan(0.5f*fov * Mathf.Deg2Rad), 0f, 0f);  
+                        1.0f / Mathf.Tan(0.5f*fov * Mathf.Deg2Rad),
+                        -camShiftX, 
+                        -camShiftY);  
                     mat.SetVector("_FovParams", fovParams);
                     
                     validCameraTransform = true;
                 }
 
-                _rt = new RenderTexture(outTextureSize, outTextureSize, 32, RenderTextureFormat.Default, RenderTextureReadWrite.sRGB);
-                _rt.filterMode = FilterMode.Point;
-                RenderTexture rt2 = null;
-                if(outMarginIterations > 0) {
-                    rt2 = new RenderTexture(outTextureSize, outTextureSize, 0, RenderTextureFormat.Default, RenderTextureReadWrite.sRGB);
-                    rt2.filterMode = FilterMode.Point;
-                }
-                foreach(var map in udims) {
-                    int udimx = (map.Key & 65535) - 1000;
-                    int udimy = (map.Key >> 16  ) - 1000;
-                    mat.SetVector("_UDIMOffset", new Vector4(udimx, udimy, 0f, 0f));
-                    var list = map.Value;
+                if(refmaps.Count > 0)
+				{
+                    LogError("ERROR! : _REFLECTIONMAP : implementation not yet complete!");
 
-
-                    RenderTexture prevrt = UnityEngine.RenderTexture.active;
-                    UnityEngine.RenderTexture.active = _rt;
-                    GL.Clear(true, true, new Color(1f, 0f, 1f, 0f));           
-                    for(int i = 0; i < list.Count; i++) {
-                        var usingUVSource = list[i].Item3;
-                        if(!usingUVSource && !validCameraTransform) {
-                            LogError("ERROR! : No camera transform, and no UVSOURCE, object: " + list[i].Item1.name);
-                            continue;
-                        }
-                        Log("TRANSFER OBJECT: " + list[i].Item1.name + (usingUVSource ? " (using UVSOURCE)":"") + (udimx!=0||udimy!=0? " udim: " + udimx + "," + udimy:""));
-                        _lastTex = list[i].Item2;
-                        mat.mainTexture = list[i].Item2;
-                        mat.SetFloat("_UseSourceUV", usingUVSource ? 1f : 0f);
-                        mat.SetPass(0);
-                        Graphics.DrawMeshNow(list[i].Item1, Matrix4x4.identity);
-                    }
-                    GL.Clear(true, false, new Color(1f, 0f, 1f, 0f));
-                    UnityEngine.RenderTexture.active = prevrt;
-
-                    for(int i = 0; i < outMarginIterations; i++)
+                    /*
+                    var _rtfloat = new RenderTexture(outTextureSize, outTextureSize, 32, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear);
+                    RenderNormalsCam.targetTexture = _rtfloat;
+                    RenderNormalsCam.allowHDR = true;
+                    RenderNormalsCam.backgroundColor = new Color(0f, 0f, 0f, 0f);
+                    RenderNormalsCam.clearFlags = CameraClearFlags.Color;
+                    foreach (var refmap in refmaps)
                     {
-                        Graphics.Blit(_rt, rt2, matExpandPixels);
-                        Graphics.Blit(rt2, _rt, matExpandPixels);
+                        var outName = refmap.Item1 + "_reflectionmap" + ".png";
+                        RenderUtils.RenderSingleMesh(RenderUtils.SceneMeshInstance.Create(refmap.Item2), RenderNormalsCam, RenderNormalsMat);
+                        var pixels = toTexture2D(_rtfloat).GetPixels();
+                        var tris = new List<int>();
+                        var particles = new List<Vector3>();
+                        var particlesUV = new List<Color>();
+                        var ooSize = 1f / outTextureSize;
+                        for (int y = 0; y < outTextureSize; y++)
+                        {
+                            for (int x = 0; x < outTextureSize; x++)
+                            {
+                                var col = pixels[x + y * outTextureSize];
+                                if(col.a != 0f)
+								{
+                                    float fx = ((float)x) * ooSize;
+                                    float fy = ((float)y) * ooSize;
+                                    int cnt = particlesUV.Count;
+                                    particlesUV.Add(new Color(fx, fy, -1f, -1f));
+                                    particlesUV.Add(new Color(fx, fy,  1f, -1f));
+                                    particlesUV.Add(new Color(fx, fy,  1f,  1f));
+                                    particlesUV.Add(new Color(fx, fy, -1f, 1f));
+                                    particles.Add(new Vector3(col.r, col.g, col.b));
+                                    particles.Add(new Vector3(col.r, col.g, col.b));
+                                    particles.Add(new Vector3(col.r, col.g, col.b));
+                                    particles.Add(new Vector3(col.r, col.g, col.b));
+
+                                    tris.Add(cnt);
+                                    tris.Add(cnt + 1);
+                                    tris.Add(cnt + 2);
+
+                                    tris.Add(cnt + 2);
+                                    tris.Add(cnt + 3);
+                                    tris.Add(cnt);
+                                }
+                            }
+                        }
+                        var mesh = new Mesh();
+                        mesh.vertices = particles.ToArray();
+                        mesh.colors = particlesUV.ToArray();
+                        mesh.indexFormat = particles.Count < 65536 ? UnityEngine.Rendering.IndexFormat.UInt16 : UnityEngine.Rendering.IndexFormat.UInt32;
+                        mesh.triangles = tris.ToArray();
+                        // todo render particles
+                        RenderUtils.RenderSingleMesh(RenderUtils.SceneMeshInstance.Create(refmap.Item2), RenderNormalsCam, RenderNormalsMat);
+
+
+                        SaveTexture(System.IO.Path.Combine(outDir != "" ? outDir : GetPathNextToExe(), outName), _rt);
                     }
-
-                    debugOut.mainTexture = _rt;
-
-                    var outName = "out_" +udimx+ "_" +udimy+ ".png";
-                    Log("");
-                    Log("SAVING PNG: " + outName);
-                    Log("");
-                    SaveTexture(System.IO.Path.Combine(outDir != "" ? outDir : GetPathNextToExe(), outName), _rt);
-
+                    */
                 }
-                if(rt2 != null)
-                    Destroy(rt2);
+
+                if (udims.Count > 0)
+				{
+                    _rt = new RenderTexture(outTextureSize, outTextureSize, 32, RenderTextureFormat.Default, RenderTextureReadWrite.sRGB);
+                    _rt.filterMode = FilterMode.Point;
+                    RenderTexture rt2 = null;
+                    if(outMarginIterations > 0) {
+                        rt2 = new RenderTexture(outTextureSize, outTextureSize, 0, RenderTextureFormat.Default, RenderTextureReadWrite.sRGB);
+                        rt2.filterMode = FilterMode.Point;
+                    }
+                    foreach(var map in udims) {
+                        int udimx = (map.Key & 65535) - 1000;
+                        int udimy = (map.Key >> 16  ) - 1000;
+                        mat.SetVector("_UDIMOffset", new Vector4(udimx, udimy, 0f, 0f));
+                        var list = map.Value;
+
+
+                        RenderTexture prevrt = UnityEngine.RenderTexture.active;
+                        UnityEngine.RenderTexture.active = _rt;
+                        GL.Clear(true, true, new Color(1f, 0f, 1f, 0f));           
+                        for(int i = 0; i < list.Count; i++) {
+                            var usingOLDUV = list[i].Item3;
+                            if(!usingOLDUV && !validCameraTransform) {
+                                LogError("ERROR! : No camera transform, and no OLDUV, object: " + list[i].Item1.name);
+                                continue;
+                            }
+                            Log("TRANSFER OBJECT: " + list[i].Item1.name + (usingOLDUV ? " (using OLDUV)":"") + (udimx!=0||udimy!=0? " udim: " + udimx + "," + udimy:""));
+                            _lastTex = list[i].Item2;
+                            mat.mainTexture = list[i].Item2;
+                            mat.SetFloat("_UseOLDUV", usingOLDUV ? 1f : 0f);
+                            mat.SetPass(0);
+                            Graphics.DrawMeshNow(list[i].Item1, Matrix4x4.identity);
+                        }
+                        GL.Clear(true, false, new Color(1f, 0f, 1f, 0f));
+                        UnityEngine.RenderTexture.active = prevrt;
+
+                        for(int i = 0; i < outMarginIterations; i++)
+                        {
+                            Graphics.Blit(_rt, rt2, matExpandPixels);
+                            Graphics.Blit(rt2, _rt, matExpandPixels);
+                        }
+
+                        debugOut.mainTexture = _rt;
+
+                        var outName = "out_" +udimx+ "_" +udimy+ ".png";
+                        Log("");
+                        Log("SAVING PNG: " + outName);
+                        Log("");
+                        SaveTexture(System.IO.Path.Combine(outDir != "" ? outDir : GetPathNextToExe(), outName), _rt);
+
+                    }
+                    if(rt2 != null)
+                        Destroy(rt2);
+				}
 
             }
             catch(System.Exception e) {
@@ -362,10 +454,12 @@ namespace teadrinker
 
         void Update() {
             debugOut.mainTexture = showResult ? _rt : _lastTex;
+            /*
             if(saveResult) {
                 saveResult = false;
                 SaveTexture(System.IO.Path.Combine(outDir, "debugOut.png"), _rt);
             }
+            */
         }
         void OnDisable()
         {

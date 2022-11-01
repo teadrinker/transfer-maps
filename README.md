@@ -3,7 +3,9 @@
 Simple Unity app to transfer textures between UV-layouts, as I feel baking in Blender is too cumbersome/slow/error prone. Ideally this would be more integrated, perhaps as a Blender add-on, but for now just use OBJ...
 
 ## Usage
- - Duplicate objects in your 3D app and add `_UVSOURCE` as postfix
+ - Make sure each object has only 1 material
+ - Make sure object namings are unique, and also that the name is not a part of another name, in the case with the names "Human" and "HumanHead", rename the former "HumanMain" or similar.
+ - Duplicate object(s) in your 3D app and add `_OLDUV` as postfix
  - Change the UV coords of the original object to the new/desired UV layout.
  - Export as OBJ with the option "Material Groups" enabled
  - Drop OBJ file on TransferMaps.exe (or drop OBJ file on the application window)
@@ -28,9 +30,9 @@ Simple Unity app to transfer textures between UV-layouts, as I feel baking in Bl
  - It will try to read all source textures into gpu memory (so you might not want to do too much at once)
 
 ## Projection
-If you assign UVs based on projection from a camera with low-poly geometry, you will get distortion using the `_UVSOURCE` method. As an alternative you can specify a global camera transform, and it will then be projected for each pixel. Unfortunately the OBJ format don't really support transforms, so you need to create boxes to mark the camera position and camera target. Note that projection is only attempted for objects that have no matching `_UVSOURCE` object.
+If you assign UVs based on projection from a camera with low-poly geometry, you will get distortion using the `_OLDUV` method. As an alternative you can specify a global camera transform, and it will then be projected for each pixel. Unfortunately the OBJ format don't really support transforms, so you need to create boxes to mark the camera position and camera target. Note that projection is only attempted for objects that have no matching `_OLDUV` object.
 
-    cam_pos_90 - use this naming for mesh defining the camera position, the last number is the FOV in degrees
+    cam_pos_90 - use this naming for mesh defining the camera position, the last number is the FOV in degrees, **optionally you can add lens shift x and y** (for example cam_pos_90_0.2_0.2)
     cam_target - use this naming for mesh defining the camera target
     cam_right  - (optional) use this naming for mesh defining the camera right (needed for camera with roll)
 

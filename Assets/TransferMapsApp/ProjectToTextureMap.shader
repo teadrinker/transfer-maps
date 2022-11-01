@@ -22,13 +22,13 @@
 			{
 				float4 vertex : POSITION;
 				float2 uv : TEXCOORD0;    
-				float2 uv2 : TEXCOORD1;   // _UseSourceUV
+				float2 uv2 : TEXCOORD1;   // _UseOLDUV
 			};
 
 			struct v2f
 			{
 				float3 wPos : TEXCOORD1;
-				float2 uv : TEXCOORD0;     // _UseSourceUV
+				float2 uv : TEXCOORD0;     // _UseOLDUV
 				float4 vertex : SV_POSITION;
 			};
 
@@ -37,7 +37,7 @@
 			float4x4 _ToCameraSpace;
 			float4 _FovParams;
 			float4 _UDIMOffset;
-			float _UseSourceUV;
+			float _UseOLDUV;
 
 			v2f vert (appdata v)
 			{
@@ -56,11 +56,11 @@
 			
 			fixed4 frag (v2f i) : SV_Target
 			{
-				if(_UseSourceUV > 0.5) // should be shader variant really, but doesn't matter, pixel transfer and png encoding/decoding will be the real bottlenecks anyway... 
+				if(_UseOLDUV > 0.5) // should be shader variant really, but doesn't matter, pixel transfer and png encoding/decoding will be the real bottlenecks anyway... 
 					return tex2D(_MainTex, i.uv);
 
 				float3 camSpacePos = mul(_ToCameraSpace, float4(i.wPos, 1.0));
-				float2 uvProj = camSpacePos.xy * _FovParams.xy * 0.5 / camSpacePos.z + 0.5;
+				float2 uvProj = camSpacePos.xy * _FovParams.xy * 0.5 / camSpacePos.z + 0.5 + _FovParams.zw;
 				return tex2D(_MainTex, uvProj);		
 
 				//return float4(1.0, 0.5, 0.0, 1.0);
