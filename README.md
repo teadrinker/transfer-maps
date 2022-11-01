@@ -32,9 +32,9 @@ Simple Unity app to transfer textures between UV-layouts, as I feel baking in Bl
 ## Projection
 If you assign UVs based on projection from a camera with low-poly geometry, you will get distortion using the `_OLDUV` method. As an alternative you can specify a global camera transform, and it will then be projected for each pixel. Unfortunately the OBJ format don't really support transforms, so you need to create boxes to mark the camera position and camera target. Note that projection is only attempted for objects that have no matching `_OLDUV` object.
 
-    cam_pos_90 - use this naming for mesh defining the camera position, the last number is the FOV in degrees, **optionally you can add lens shift x and y** (for example cam_pos_90_0.2_0.2)
-    cam_target - use this naming for mesh defining the camera target
-    cam_right  - (optional) use this naming for mesh defining the camera right (needed for camera with roll)
+ * `cam_pos_90` - use this naming for mesh defining the camera position, the number is the FOV in degrees, ***optionally you can add lens shift x and y*** (for example `cam_pos_90_0.2_-0.1`)
+ * `cam_target` - use this naming for mesh defining the camera target
+ * `cam_right`  - (optional) use this naming for mesh defining the camera right (needed for camera with roll)
 
 ![Projection Example](transfer-maps-projection.jpg)
 
