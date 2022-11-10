@@ -2,7 +2,7 @@ Shader "teadrinker/RenderNormals"
 {
     Properties
     {
-        _MainTex ("Texture", 2D) = "white" {}
+        //_MainTex ("Texture", 2D) = "white" {}
     }
     SubShader
     {
@@ -16,6 +16,8 @@ Shader "teadrinker/RenderNormals"
             #pragma fragment frag
 
             #include "UnityCG.cginc"
+
+			//float4 _global_camera_shift;
 
 			struct appdata
 			{
@@ -32,9 +34,11 @@ Shader "teadrinker/RenderNormals"
 			{
 				v2f o;
 				o.vertex = UnityObjectToClipPos(v.vertex);
+				//o.vertex.xy += _global_camera_shift.xy;
 
 				float3 viewDir = normalize(ObjSpaceViewDir(v.vertex));
-				float3 up = mul((float3x3)unity_WorldToObject, float3(0,1,0)); // needs normalize if non uniform scale?
+				//float3 up = mul((float3x3)unity_WorldToObject, float3(0,1,0)); // needs normalize if non uniform scale?
+				float3 up = normalize(mul((float3x3)unity_WorldToObject, float3(0,1,0))); 
 				float3 left = normalize(cross(up, viewDir));
 				up = normalize(cross(viewDir, left));
 				o.normal = mul(float3x3(left, up, viewDir), v.normal);
@@ -45,6 +49,7 @@ Shader "teadrinker/RenderNormals"
 			fixed4 frag(v2f i) : COLOR
 			{
 				return float4(normalize(i.normal), 1.0);
+//				return float4(abs(normalize(i.normal)) > 0.95 ? 1.0 : 0.0, 1.0);
 			}
 
             ENDCG

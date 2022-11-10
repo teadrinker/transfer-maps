@@ -4,7 +4,7 @@ Simple Unity app to transfer textures between UV-layouts, as I feel baking in Bl
 
 ## Usage
  - Make sure each object has only 1 material
- - Make sure object namings are unique, and also that the name is not a part of another name, in the case with the names "Human" and "HumanHead", rename the former "HumanMain" or similar.
+ - Make sure object names are unique
  - Duplicate object(s) in your 3D app and add `_OLDUV` as postfix
  - Change the UV coords of the original object to the new/desired UV layout.
  - Export as OBJ with the option "Material Groups" enabled

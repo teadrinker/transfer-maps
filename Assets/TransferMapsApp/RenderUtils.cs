@@ -6,13 +6,24 @@ namespace teadrinker
 {
     public static class RenderUtils
     {
+
+		public static void ApplyMatrixToTransform(Matrix4x4 matrix, Transform t)
+		{
+			t.position = GetPosition(matrix);
+			t.rotation = matrix.rotation;
+			t.localScale = (matrix.lossyScale.x * (t.parent == null ? 1f : 1f / t.parent.lossyScale.x)) * Vector3.one;
+		}
+
+		public static Vector3 GetPosition(Matrix4x4 matrix) { return matrix.GetColumn(3); }
+
         static public void ApplyCameraParams(Camera cam, Vector3 pos, Quaternion rot, float fov, float xshift=0f, float yshift=0f)
 		{
+            cam.aspect = 1f;
             cam.transform.position = pos;
             cam.transform.rotation = rot;
             cam.transform.localScale = Vector3.one;
             cam.fieldOfView = fov;
-            SetCameraLensShift(cam, xshift, yshift);
+            SetCameraLensShift(cam, xshift*2, yshift*2); // using blender shift standard
         }
         static public void SetCameraLensShift(Camera cam, float xshift, float yshift)
         {
@@ -65,12 +76,46 @@ namespace teadrinker
                 if (rt == null) { Debug.LogError("RenderMeshes requires RenderTexture"); return; }
             }
 
-            RenderTexture prev = RenderTexture.active;
 
+            if(true) 
+            {
+                int layer = 16; // NOTE, THIS IS ASSUMING LAYER 16 IS NOT USED BY ANYONE ELSE!
+
+                List<GameObject> gos = new List<GameObject>();
+                for (int i = 0; i < scene.Count; i++)
+                {
+                    //if (((1 << Meshes[i].layer) & cam.cullingMask) != 0)
+                    {
+                        var go = new GameObject();
+                        go.name = scene[i].mesh.name;
+                        Debug.Log("dfdfg "+go.name);
+                        go.layer = layer;
+                        go.AddComponent<MeshFilter>().sharedMesh = scene[i].mesh;
+                        go.AddComponent<MeshRenderer>().sharedMaterial = mat;
+                        ApplyMatrixToTransform(scene[i].matrix, go.transform);
+                        gos.Add(go);
+                    }
+                }
+                cam.cullingMask = 1<<layer;
+                cam.Render();
+                //cam.RenderWithShader(mat.shader, "");
+
+                foreach(var go in gos)
+                    Object.Destroy(go);
+
+                return;
+            }
+
+
+
+            RenderTexture prev = RenderTexture.active;
             RenderTexture.active = rt;
+
             var projectionMatrix = cam.projectionMatrix;
             var viewMatrix = cam.worldToCameraMatrix;
+            
             GL.Clear((cam.clearFlags & CameraClearFlags.Depth) != 0, (cam.clearFlags & CameraClearFlags.Color) != 0, cam.backgroundColor);
+            
             if (cam.cullingMask != 0)
             {
                 GL.PushMatrix();
